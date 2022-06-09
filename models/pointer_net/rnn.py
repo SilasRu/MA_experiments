@@ -1,42 +1,45 @@
 import torch
 from torch import nn
-import torch.nn as F
+from torch.nn import functional as F
 from torch.nn import init
 from .utils import reorder_sequence, reorder_lstm_states
 
-def lstm_encoder(sequence, lstm, seq_lens=None, init_states=None, embedding=None):
+def lstm_encoder(sequence, lstm,
+                 seq_lens=None, init_states=None, embedding=None):
     """ functional LSTM encoder (sequence is [b, t]/[b, t, d],
     lstm should be rolled lstm)"""
     batch_size = sequence.size(0)
     if not lstm.batch_first:
         sequence = sequence.transpose(0, 1)
-        emb_sequence = embedding(sequence) if embedding is not None else sequence
+        emb_sequence = (embedding(sequence) if embedding is not None
+                        else sequence)
+    if seq_lens:
+        assert batch_size == len(seq_lens)
+        sort_ind = sorted(range(len(seq_lens)),key=lambda i: seq_lens[i], reverse=True)
+        seq_lens = [seq_lens[i] for i in sort_ind]
+        emb_sequence = reorder_sequence(emb_sequence, sort_ind,lstm.batch_first)
+
+    if init_states is None:
+        device = sequence.get_device()
+        init_states = init_lstm_states(lstm, batch_size, device)
     else:
-        if seq_lens:
-            assert batch_size == len(seq_lens)
-            sort_ind = sorted((range(len(seq_lens))), key=(lambda i: seq_lens[i]),
-              reverse=True)
-            seq_lens = [seq_lens[i] for i in sort_ind]
-            emb_sequence = reorder_sequence(emb_sequence, sort_ind, lstm.batch_first)
-        elif init_states is None:
-            device = sequence.get_device()
-            init_states = init_lstm_states(lstm, batch_size, device)
-        else:
-            init_states = (
-             init_states[0].contiguous(),
-             init_states[1].contiguous())
-        if seq_lens:
-            packed_seq = nn.utils.rnn.pack_padded_sequence(emb_sequence, seq_lens)
-            packed_out, final_states = lstm(packed_seq, init_states)
-            lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_out)
-            back_map = {ind:i for i, ind in enumerate(sort_ind)}
-            reorder_ind = [back_map[i] for i in range(len(seq_lens))]
-            lstm_out = reorder_sequence(lstm_out, reorder_ind, lstm.batch_first)
-            final_states = reorder_lstm_states(final_states, reorder_ind)
-        else:
-            lstm_out, final_states = lstm(emb_sequence, init_states)
-    return (
-     lstm_out, final_states)
+        init_states = (init_states[0].contiguous(),
+                       init_states[1].contiguous())
+
+    if seq_lens:
+        packed_seq = nn.utils.rnn.pack_padded_sequence(emb_sequence,
+                                                       seq_lens)
+        packed_out, final_states = lstm(packed_seq, init_states)
+        lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_out)
+
+        back_map = {ind: i for i, ind in enumerate(sort_ind)}
+        reorder_ind = [back_map[i] for i in range(len(seq_lens))]
+        lstm_out = reorder_sequence(lstm_out, reorder_ind, lstm.batch_first)
+        final_states = reorder_lstm_states(final_states, reorder_ind)
+    else:
+        lstm_out, final_states = lstm(emb_sequence, init_states)
+
+    return lstm_out, final_states
 
 
 def init_lstm_states(lstm, batch_size, device):

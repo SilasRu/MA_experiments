@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import init
-import torch.nn as F
+from torch.nn import functional as F
 from .utils import len_mask
 from .rnn import MultiLayerLSTMCells
 INI = 0.01
