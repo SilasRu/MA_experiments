@@ -15,14 +15,33 @@ stemmer = SnowballStemmer('english')
 
 
 class KeywordGenerator:
-    def __init__(self, text) -> None:
-        self.text = text
+    def __init__(self) -> None:
+        pass
 
     def clean_data(self):
         pass
 
     def extract_keywords(self):
         pass
+
+    def split_text(self, text):
+        split_len = 1000
+        batches = [text[i: i + split_len] for i in range(0, len(text), split_len)]
+        return batches
+
+    def merge_batch_keywords(self, batches):
+        top_n = {key: [] for key in batches[0]}
+        for batch in batches:
+            for key in batch.keys():
+                try:
+                    i = 0
+                    while batch[key][i] in top_n[key] and i <= len(batch[key]):
+                        i += 1
+                    top_n[key].append(batch[key][i])
+                except:
+                    print(f'could not process {key}')
+                    top_n[key].append('None')
+        return top_n
 
     def _deduplicate_words(self, words: list) -> list:
         '''Checks for duplicate keywords based on the word stem and starting 4 letters.
@@ -43,14 +62,15 @@ class KeywordGenerator:
 
 
 class KeyBert(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = KeyBERT()
 
-    def extract_keywords(self):
-        kws = self.model.extract_keywords(self.text, keyphrase_ngram_range=(1, 1), top_n=8)
-        kws_mmr = self.model.extract_keywords(self.text, keyphrase_ngram_range=(1, 1), use_mmr=True, top_n=8)
-        kws_maxsum = self.model.extract_keywords(self.text, keyphrase_ngram_range=(1, 1), use_maxsum=True, top_n=8)
+    def extract_keywords(self, text):
+        super().extract_keywords()
+        kws = self.model.extract_keywords(text, keyphrase_ngram_range=(1, 1), top_n=8)
+        kws_mmr = self.model.extract_keywords(text, keyphrase_ngram_range=(1, 1), use_mmr=True, top_n=8)
+        kws_maxsum = self.model.extract_keywords(text, keyphrase_ngram_range=(1, 1), use_maxsum=True, top_n=8)
 
         kws = {
             'keybert_default': self._deduplicate_words([word for word, score in kws])[:5],
@@ -61,33 +81,35 @@ class KeyBert(KeywordGenerator):
 
 
 class RakeNltk(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = Rake()
 
-    def extract_keywords(self):
-        self.model.extract_keywords_from_text(self.text)
+    def extract_keywords(self, text):
+        self.model.extract_keywords_from_text(text)
         extracted_kws = self.model.get_ranked_phrases()
         kws = extracted_kws[:10]
         return {
             'rake': self._deduplicate_words(kws)[:5]
         }
 
+
 class Frake(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = frk.KeywordExtractor(lang='en', Number_of_keywords=10)
 
-    def extract_keywords(self):
-        extracted_kws = self.model.extract_keywords(self.text)
+    def extract_keywords(self, text):
+        extracted_kws = self.model.extract_keywords(text)
         kws = list(extracted_kws.keys())
         return {
             'frake': self._deduplicate_words(kws)[:5]
         }
 
+
 class Yake(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         language = "en"
         max_ngram_size = 2
         deduplication_thresold = 0.5
@@ -103,8 +125,8 @@ class Yake(KeywordGenerator):
             top=numOfKeywords, features=None
         )
 
-    def extract_keywords(self):
-        extracted_kws = self.model.extract_keywords(self.text)
+    def extract_keywords(self, text):
+        extracted_kws = self.model.extract_keywords(text)
         kws = []
         for word in extracted_kws:
             kws.append(word[0])
@@ -114,12 +136,12 @@ class Yake(KeywordGenerator):
 
 
 class TextRank(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = kex.TextRank()
 
-    def extract_keywords(self):
-        extracted_kws = self.model.get_keywords(self.text, n_keywords=10)
+    def extract_keywords(self, text):
+        extracted_kws = self.model.get_keywords(text, n_keywords=10)
         kws = []
         for phrase in extracted_kws:
             kws.append(phrase['raw'][0])
@@ -129,12 +151,12 @@ class TextRank(KeywordGenerator):
 
 
 class TopicRank(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = kex.TopicRank()
 
-    def extract_keywords(self):
-        extracted_kws = self.model.get_keywords(self.text, n_keywords=10)
+    def extract_keywords(self, text):
+        extracted_kws = self.model.get_keywords(text, n_keywords=10)
         kws = []
         for phrase in extracted_kws:
             kws.append(phrase['raw'][0])
@@ -144,12 +166,12 @@ class TopicRank(KeywordGenerator):
 
 
 class PositionRank(KeywordGenerator):
-    def __init__(self, text) -> None:
-        super().__init__(text)
+    def __init__(self) -> None:
+        super().__init__()
         self.model = kex.PositionRank()
 
-    def extract_keywords(self):
-        extracted_kws = self.model.get_keywords(self.text, n_keywords=10)
+    def extract_keywords(self, text):
+        extracted_kws = self.model.get_keywords(text, n_keywords=10)
         kws = []
         for phrase in extracted_kws:
             kws.append(phrase['raw'][0])
@@ -159,8 +181,8 @@ class PositionRank(KeywordGenerator):
 
 
 class Attention(KeywordGenerator):
-    def __init__(self, text, model_path) -> None:
-        super().__init__(text)
+    def __init__(self, model_path) -> None:
+        super().__init__()
         self.model_path = model_path
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModel.from_pretrained(model_path, output_attentions=True)
@@ -168,10 +190,10 @@ class Attention(KeywordGenerator):
 
         tokens_to_remove = stopwords.words('english')
         tokens_to_remove.extend(self.tokenizer.all_special_tokens)
-        tokens_to_remove.extend(['.', ',', "'", '-', '_', '–', 'γ',':', 'the', 'and', 'Ġ', '<s>', ')', '('])
+        tokens_to_remove.extend(['.', ',', "'", '-', '_', '–', 'γ', ':', 'the', 'and', 'Ġ', '<s>', ')', '('])
         self.tokens_to_remove = list(set(tokens_to_remove))
 
-    def _encode_text(self):
+    def _encode_text(self, text):
         '''encodes a string input
 
         Returns:
@@ -182,7 +204,7 @@ class Attention(KeywordGenerator):
                 attentions: n_layers x [batch_size, num_heads, seq_len, seq_len]
             tokens: [seq_len] -> includes padding + sep
         '''
-        inputs = self.tokenizer.encode(self.text, return_tensors='pt')
+        inputs = self.tokenizer.encode(text, return_tensors='pt')
         # Output includes attention weights when output_attentions=True
         outputs = self.model(inputs)
         attentions = outputs[-1]
@@ -246,13 +268,13 @@ class Attention(KeywordGenerator):
                 convoluted_attentions = convoluted_attentions @ np.array(head)
         return convoluted_attentions
 
-    def _extract_keyword_dict(self):
+    def _extract_keyword_dict(self, text):
         '''extracts keywords with all convolution operators
 
         Returns:
             extraction_dict: {tokens=[], [operators=[]]}
         '''
-        encodings = self._encode_text()
+        encodings = self._encode_text(text)
         extraction_dict = {'tokens': encodings['tokens']}
 
         for head_operator in self.convolution_operators:
@@ -291,8 +313,8 @@ class Attention(KeywordGenerator):
         sorted_df = pd.DataFrame(sorted_dict)
         return sorted_df
 
-    def extract_keywords(self):
-        keyword_dict = self._extract_keyword_dict()
+    def extract_keywords(self, text):
+        keyword_dict = self._extract_keyword_dict(text)
         keyword_df = self._clean_and_convert_keyword_dict(keyword_dict)
         normalized_df = self._normalize_df(keyword_df)
         sorted_df = self._extract_ranked_keywords(normalized_df, 20)
