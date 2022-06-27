@@ -1,10 +1,11 @@
 import nltk
 import kex
 import yake
+import json
 import FRAKE.FRAKE as frk
 import numpy as np
 import pandas as pd
-from transformers import AutoTokenizer, AutoModel, utils
+from transformers import AutoTokenizer, AutoModel, utils, pipeline
 from keybert import KeyBERT
 from rake_nltk import Rake
 from nltk.corpus import stopwords
@@ -16,7 +17,7 @@ stemmer = SnowballStemmer('english')
 
 class KeywordGenerator:
     def __init__(self) -> None:
-        pass
+        self.ner = pipeline("ner", aggregation_strategy='simple')
 
     def clean_data(self):
         pass
@@ -24,10 +25,30 @@ class KeywordGenerator:
     def extract_keywords(self):
         pass
 
-    def split_text(self, text):
-        split_len = 1000
-        batches = [text[i: i + split_len] for i in range(0, len(text), split_len)]
+    def _chunk_text(self, text, chunk_size):
+        batches = [text[i: i + chunk_size] for i in range(0, len(text), chunk_size)]
         return batches
+    
+    def _get_entities(self, text, pers_only=True):
+        entities = self.ner(text)
+        if pers_only:
+            entity_list = set([i['word'].lower() for i in entities if i['entity_group'] == 'PER'])
+        else:
+            entity_list = set([i['word'].lower() for i in entities])
+        return entity_list
+    
+    def preprocess_and_chunk_transcript(self, transcript_path, chunk_size=1024):
+        with open(transcript_path, 'r') as f:
+            transcript = json.load(f)
+            speaker_frames = transcript['transcript']['content'][0]['content']
+
+            utterances = []
+            for x in range(len(speaker_frames)):
+                speaker_name = transcript['speaker_info'][speaker_frames[x]['attrs']['speakerId']-1]['name']
+                utterances.append(f'{speaker_name}: ' + ''.join([i['content'][0]['text'] for i in speaker_frames[x]['content']]))
+            utterances = ''.join(utterances)
+        chunked = self._chunk_text(utterances, chunk_size)
+        return chunked
 
     def merge_batch_keywords(self, batches):
         top_n = {key: [] for key in batches[0]}
@@ -43,7 +64,7 @@ class KeywordGenerator:
                     top_n[key].append('None')
         return top_n
 
-    def _deduplicate_words(self, words: list) -> list:
+    def _deduplicate_words(self, words: list, entities=[]) -> list:
         '''Checks for duplicate keywords based on the word stem and starting 4 letters.
 
         Returns:
@@ -54,7 +75,7 @@ class KeywordGenerator:
 
         for i, word in enumerate(words):
             stem = stemmer.stem(word)[:4]
-            if stem not in stemmed_words:
+            if stem not in stemmed_words and word.lower() not in entities and len(word) > 2 :
                 stemmed_words.add(stem)
                 stemmed_words_index.append(i)
 
@@ -313,14 +334,17 @@ class Attention(KeywordGenerator):
         sorted_df = pd.DataFrame(sorted_dict)
         return sorted_df
 
-    def extract_keywords(self, text):
+    def extract_keywords(self, text, n_words=5, remove_pers=False):
+        if remove_pers:
+            entities = self._get_entities(text)
+
         keyword_dict = self._extract_keyword_dict(text)
         keyword_df = self._clean_and_convert_keyword_dict(keyword_dict)
         normalized_df = self._normalize_df(keyword_df)
         sorted_df = self._extract_ranked_keywords(normalized_df, 20)
         kws = {
-            'attention_max': self._deduplicate_words(sorted_df['row_max'])[:5],
-            'attention_mean': self._deduplicate_words(sorted_df['row_mean'])[:5],
-            'attention_sum': self._deduplicate_words(sorted_df['row_sum'])[:5]
+            'attention_max': self._deduplicate_words(sorted_df['row_max'], entities)[:n_words],
+            'attention_mean': self._deduplicate_words(sorted_df['row_mean'], entities)[:n_words],
+            'attention_sum': self._deduplicate_words(sorted_df['row_sum'], entities)[:n_words]
         }
         return kws

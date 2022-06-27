@@ -25,8 +25,14 @@ def main():
 
     for i, r in df_ref.iterrows():
         filename = f"{r['file_id']}_{i}"
-        path = f'/Users/silas.rudolf/projects/School/MA/experiments/data/keyword-eval/{filename}.csv'
-        pred_df = pd.read_csv(path)
+        print(f'processing - {filename}')
+        try:
+            path = f'/Users/silas.rudolf/projects/School/MA/experiments/data/keyword-eval/processed/{filename}.csv'
+            pred_df = pd.read_csv(path)
+        except:
+            print(f'Could not read file {filename} - continuing')
+            continue
+
         true = [word for word in r['summary'].split(' ') if word not in tokens_to_remove]
         scores['filename'].append(filename)
 
@@ -39,6 +45,7 @@ def main():
                     scores[f'{predictor}_{metric}'].append(scores_for_predictor[metric])
                 else:
                     scores[f'{predictor}_{metric}'].append(None)
+
 
     scores_df = pd.DataFrame(scores)
     scores_df.to_csv(f'/Users/silas.rudolf/projects/School/MA/experiments/data/keyword-eval/scores.csv', index=False)

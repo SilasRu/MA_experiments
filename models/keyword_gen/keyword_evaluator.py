@@ -16,7 +16,7 @@ class Evaluator:
         try:
             assert k <= len(true) and k <= len(pred)
         except:
-            print(f'k {k} is smaller than true: {len(true)} or pred: {len(pred)}')
+            # print(f'k {k} is smaller than true: {len(true)} or pred: {len(pred)}')
             return 
         true_stems, pred_stems = self._stem(true, pred)
 
@@ -32,8 +32,15 @@ class Evaluator:
     
     def _rogue(self, true, pred):
         true_stems, pred_stems = self._stem(true, pred)
+        if len(true_stems) < len(pred_stems):
+            pred_stems = pred_stems[:len(true_stems)]
+        if len(pred_stems) < len(true_stems):
+            true_stems = true_stems[:len(pred_stems)]
+        
         hyps = true_stems
         refs = [pred_stems for _ in pred_stems]
+        print(hyps)
+        print(refs)
         score = rouge.evaluate_tokenized(hyps, refs)
         score_rounded = {
             'rouge_1_r': round(score['rouge-1']['r'], 2),
@@ -45,7 +52,7 @@ class Evaluator:
     
     def evaluate(self, true, pred):
         if len(true) < len(pred):
-            print(f'Trimming pred to len {len(true)}')
+            # print(f'Trimming pred to len {len(true)}')
             pred = pred[:len(true)]
         prec_2 = self._precision_k(true, pred, 2)
         prec_3 = self._precision_k(true, pred, 3)
