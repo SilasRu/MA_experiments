@@ -211,10 +211,10 @@ class Attention(KeywordGenerator):
 
         tokens_to_remove = stopwords.words('english')
         tokens_to_remove.extend(self.tokenizer.all_special_tokens)
-        tokens_to_remove.extend(['.', ',', "'", '-', '_', '–', 'γ', ':', 'the', 'and', 'Ġ', '<s>', ')', '('])
+        tokens_to_remove.extend(['.', ' ', ',', "'", '-', '_', '–', 'γ', ':', 'the', 'and', 'Ġ', '<s>', ')', '('])
         self.tokens_to_remove = list(set(tokens_to_remove))
 
-    def _encode_text(self, text):
+    def _encode_text(self, text, attention_type='decoder_attentions'):
         '''encodes a string input
 
         Returns:
@@ -228,7 +228,7 @@ class Attention(KeywordGenerator):
         inputs = self.tokenizer.encode(text, return_tensors='pt')
         # Output includes attention weights when output_attentions=True
         outputs = self.model(inputs)
-        attentions = outputs[-1]
+        attentions = outputs[attention_type]
         tokens = self.tokenizer.convert_ids_to_tokens(inputs[0])
 
         encodings = {
@@ -289,14 +289,14 @@ class Attention(KeywordGenerator):
                 convoluted_attentions = convoluted_attentions @ np.array(head)
         return convoluted_attentions
 
-    def _extract_keyword_dict(self, text):
+    def _extract_keyword_dict(self, text, attention_type):
         '''extracts keywords with all convolution operators
 
         Returns:
             extraction_dict: {tokens=[], [operators=[]]}
         '''
-        encodings = self._encode_text(text)
-        extraction_dict = {'tokens': encodings['tokens']}
+        encodings = self._encode_text(text, attention_type)
+        extraction_dict = {'tokens': [token.strip('Ġ') for token in encodings['tokens']]}
 
         for head_operator in self.convolution_operators:
             for layer_operator in self.convolution_operators:
@@ -334,11 +334,11 @@ class Attention(KeywordGenerator):
         sorted_df = pd.DataFrame(sorted_dict)
         return sorted_df
 
-    def extract_keywords(self, text, n_words=5, remove_pers=False):
+    def extract_keywords(self, text, n_words=5, remove_pers=False, attention_type='encoder_attentions'):
         if remove_pers:
             entities = self._get_entities(text)
 
-        keyword_dict = self._extract_keyword_dict(text)
+        keyword_dict = self._extract_keyword_dict(text, attention_type)
         keyword_df = self._clean_and_convert_keyword_dict(keyword_dict)
         normalized_df = self._normalize_df(keyword_df)
         sorted_df = self._extract_ranked_keywords(normalized_df, 20)
